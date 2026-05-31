@@ -11,8 +11,8 @@ The system is built in four parts:
 |---|--------|----------|--------|
 | 1 | **Sunday Optimizer** — backtests ~500k parameter combos, walk-forward, picks champion | Python | ✅ implemented |
 | 2 | **Generator** — Jinja2 fills a NinjaScript C# template from the champion JSON | Python / C# | ✅ implemented |
-| 3 | **Risk Layer** — high-impact news + drawdown guard, halves position size | Python / C# | 🔜 scaffolded |
-| 4 | **Monitoring** — Discord/Telegram bot: daily PnL, win rate, weekly "Strategy of the Week", execution audit | Python | 🔜 scaffolded |
+| 3 | **Risk Layer** — high-impact news + drawdown guard, halves position size | Python / C# | ✅ implemented |
+| 4 | **Monitoring** — Discord/Telegram bot: daily PnL, win rate, weekly "Strategy of the Week", execution audit | Python | ✅ implemented |
 
 ---
 
@@ -157,16 +157,98 @@ python -m src.generator.generate \
 
 ---
 
-## 4. Roadmap — Modules 3–4
+## 4. Module 3 — the Risk Layer  ✅
 
-- **Risk Layer:** poll FinancialModelingPrep / ForexFactory for high-impact
-  events; expose a `risk_multiplier` (→ `0.5`) when high-impact news is
-  imminent *or* the account is within 20% of max daily drawdown. NinjaScript
-  multiplies its position size by this value.
-- **Monitoring bot (Discord/Telegram):** daily trades / PnL / win-rate report,
-  weekly "Strategy of the Week" from the optimizer leaderboard, and an audit
-  routine that diffs expected backtest trades against actual broker
-  executions to flag slippage / fills.
+> *"A news/risk engine using FinancialModelingPrep or ForexFactory to detect
+> high-impact news. If high-impact news occurs OR the account reaches within
+> 20% of max daily drawdown, automatically reduce position size by 50%."*
+
+```
+src/risk/
+├── news.py        # FinancialModelingPrep + ForexFactory high-impact detection
+├── drawdown.py    # daily-drawdown buffer guard
+└── engine.py      # combine triggers -> write risk_state.json
+```
+
+**Run it (on the trading box, e.g. on a schedule / each loop):**
+
+```bash
+python -m src.risk.engine \
+    --fmp-key "$FMP_API_KEY" --news-source fmp \
+    --max-daily-drawdown 1000 --day-pnl -820 \
+    --window-minutes 60 --currencies USD \
+    --out output/risk_state.json
+```
+
+**How it hits the requirements**
+
+- **High-impact news:** `news.py` pulls the FinancialModelingPrep economic
+  calendar (ForexFactory weekly JSON as a fallback) and trips if a *High*-impact
+  event for the watched currency falls within ±`window-minutes` of now.
+- **Drawdown guard:** `drawdown.py` trips when the day's loss has reached ≥ 80%
+  of the configured max daily drawdown — i.e. the account is *within 20%* of the
+  limit.
+- **−50% size:** if **either** trigger fires, `engine.py` writes
+  `risk_multiplier = 0.5` (else `1.0`) into `output/risk_state.json`. The
+  generated NinjaScript re-reads this file at runtime and sizes orders as
+  `BaseQuantity × risk_multiplier` (fail-safe: never upsizes on a read error).
+- **Resilient:** all network calls are lazy, timed out, and degrade gracefully
+  (a failed fetch never blocks trading).
+
+**Tests:** `python tests/test_risk.py`  (15 tests, no network)
+
+---
+
+## 5. Module 4 — Monitoring & Audit  ✅
+
+> *"A Discord or Telegram bot that reports daily trades, PnL, and win rate, plus
+> weekly 'Strategy of the Week' results, and an audit routine comparing expected
+> backtest trades to actual broker executions to detect slippage."*
+
+```
+src/monitoring/
+├── notifier.py    # pluggable Console / Discord / Telegram notifier
+├── trade_log.py   # Trade model, NinjaTrader executions CSV loader, daily_stats
+├── reports.py     # daily report + weekly "Strategy of the Week"
+├── audit.py       # backtest-vs-execution slippage / fill audit
+└── run.py         # CLI: --daily / --weekly / --audit
+```
+
+**Run it:**
+
+```bash
+# daily PnL / win-rate report from a NinjaTrader executions export
+python -m src.monitoring.run --daily --executions data/executions.csv --notifier console
+
+# weekly "Strategy of the Week" from the optimizer's leaderboard
+python -m src.monitoring.run --weekly --params output/active_params.json --notifier telegram
+
+# execution audit: expected backtest trades vs actual broker fills
+python -m src.monitoring.run --audit --expected output/expected_trades.json \
+    --actual data/executions.csv --notifier discord
+```
+
+**How it hits the requirements**
+
+- **Pluggable bot:** `--notifier {console,discord,telegram}` — both Discord
+  (webhook) and Telegram (Bot API) are supported; **console is the default** so
+  nothing breaks before you add credentials (set them in `.env`).
+- **Daily report:** trades, gross PnL, win rate, largest win/loss from the
+  executions file.
+- **Strategy of the Week:** reads the optimizer's champion + leaderboard.
+- **Execution audit:** matches expected trades to actual fills by side/time,
+  computes **signed slippage** (positive = adverse), and flags excessive
+  slippage, quantity mismatches, missing fills, and extra fills.
+
+**Tests:** `python tests/test_monitoring.py`  (8 tests, no network)
+
+---
+
+## Run all tests
+
+```bash
+for t in optimizer generator risk monitoring; do python tests/test_$t.py; done
+# optimizer 6 · generator 4 · risk 15 · monitoring 8  — all network-free
 
 ## Disclaimer
 
