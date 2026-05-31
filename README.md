@@ -10,7 +10,7 @@ The system is built in four parts:
 | # | Module | Language | Status |
 |---|--------|----------|--------|
 | 1 | **Sunday Optimizer** — backtests ~500k parameter combos, walk-forward, picks champion | Python | ✅ implemented |
-| 2 | **Generator** — Jinja2 fills a NinjaScript C# template + writes the shared param file | Python / C# | 🔜 scaffolded |
+| 2 | **Generator** — Jinja2 fills a NinjaScript C# template from the champion JSON | Python / C# | ✅ implemented |
 | 3 | **Risk Layer** — high-impact news + drawdown guard, halves position size | Python / C# | 🔜 scaffolded |
 | 4 | **Monitoring** — Discord/Telegram bot: daily PnL, win rate, weekly "Strategy of the Week", execution audit | Python | 🔜 scaffolded |
 
@@ -109,12 +109,56 @@ python tests/test_optimizer.py        # or: python -m pytest tests/ -q
 
 ---
 
-## 3. Roadmap — Modules 2–4
+## 3. Module 2 — the Generator  ✅
 
-- **Generator (Jinja2):** read `active_params.json`, render a NinjaScript C#
-  template (`templates/Strategy.cs.j2`) into `output/<Strategy>.cs`, and keep
-  the shared param file as the runtime source of truth the strategy reads in
-  `OnStateChange → State.Configure`.
+> *"A Jinja2-based generator that fills a NinjaScript C# template with optimized
+> parameters and outputs a `.cs` strategy file. Since NinjaTrader can't easily
+> hot-swap scripts, use a shared JSON parameter file the strategy reads at
+> session startup."*
+
+```
+src/generator/
+├── csharp_strategies.py   # C# translation of all 10 optimizer strategies
+└── generate.py            # load champion JSON -> render template -> .cs
+templates/
+└── Strategy.cs.j2         # NinjaScript C# template
+```
+
+**Run it (after the optimizer has written `active_params.json`):**
+
+```bash
+python -m src.generator.generate \
+    --params output/active_params.json --out-dir output \
+    --param-file "C:\NT8\bin\Custom\active_params.json" \
+    --risk-file  "C:\NT8\bin\Custom\risk_state.json" \
+    --base-quantity 1
+# -> output/InterstellarEssential_<Champion>.cs   (drop into NT Custom/Strategies)
+```
+
+**How it hits the requirements**
+
+- **Jinja2 template → `.cs`:** `templates/Strategy.cs.j2` is rendered with the
+  champion's name, parameters, and indicator/signal C# for that strategy.
+- **All 10 strategies covered:** `csharp_strategies.py` mirrors the optimizer's
+  registry; a test asserts the two registries (and their param names) never
+  drift apart.
+- **No hot-swap needed:** the generated strategy bakes the champion's params as
+  **defaults** *and* re-reads `active_params.json` in `State.Configure` at
+  session start, so a routine weekly re-tune needs **no recompile**. Only a
+  change of *champion strategy* requires regenerating the `.cs` (the file
+  detects this at runtime and warns).
+- **Dependency-free C#:** parameters are read with a tiny built-in regex JSON
+  reader, so no extra NinjaTrader references are required.
+- **Risk-layer ready:** position size is computed as
+  `BaseQuantity × riskMultiplier`, where the multiplier is read from the
+  risk-state file (Module 3) at runtime.
+
+**Tests:** `python tests/test_generator.py`
+
+---
+
+## 4. Roadmap — Modules 3–4
+
 - **Risk Layer:** poll FinancialModelingPrep / ForexFactory for high-impact
   events; expose a `risk_multiplier` (→ `0.5`) when high-impact news is
   imminent *or* the account is within 20% of max daily drawdown. NinjaScript
