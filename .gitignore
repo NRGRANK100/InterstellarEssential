@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Data & generated artifacts (keep these local / on the trading box)
+data/*.csv
+output/*.json
+output/*.cs
+!output/.gitkeep
+
+# Optuna study DB
+*.db
+*.sqlite3

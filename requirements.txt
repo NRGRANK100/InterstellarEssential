@@ -1,0 +1,29 @@
+# ── Interstellar Essential :: core dependencies ──────────────────────────
+# Pinned to majors that are known-compatible; loosen as needed.
+
+# Data / numerics
+numpy>=1.26,<3.0
+pandas>=2.1,<3.0
+
+# Market data sources
+yfinance>=0.2.40          # free OHLCV pulls for backtesting
+requests>=2.31            # FinancialModelingPrep / ForexFactory news pulls
+
+# Optimization
+optuna>=3.6,<5.0          # primary search engine (TPE / pruning)
+scipy>=1.11               # optional fallback optimizers + stats
+
+# Code generation (Module 2: Generator)
+Jinja2>=3.1
+
+# Reporting bot (Module 4: Monitoring)
+# Pick ONE of the following depending on chosen platform:
+discord.py>=2.3           # Discord bot
+python-telegram-bot>=21.0 # Telegram bot
+
+# Config / utilities
+PyYAML>=6.0
+python-dotenv>=1.0        # load API keys / secrets from .env
+
+# Optional acceleration
+numba>=0.59               # JIT for hot inner loops (optional)
