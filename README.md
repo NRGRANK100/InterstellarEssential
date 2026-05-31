@@ -195,7 +195,7 @@ python -m src.risk.engine \
 - **Resilient:** all network calls are lazy, timed out, and degrade gracefully
   (a failed fetch never blocks trading).
 
-**Tests:** `python tests/test_risk.py`  (15 tests, no network)
+**Tests:** `python tests/test_risk.py`  (14 tests, no network)
 
 ---
 
@@ -248,7 +248,7 @@ python -m src.monitoring.run --audit --expected output/expected_trades.json \
 
 ```bash
 for t in optimizer generator risk monitoring; do python tests/test_$t.py; done
-# optimizer 6 · generator 4 · risk 15 · monitoring 8  — all network-free
+# optimizer 6 · generator 4 · risk 14 · monitoring 8  — all network-free
 
 ## Disclaimer
 
