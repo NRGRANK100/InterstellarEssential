@@ -244,11 +244,37 @@ python -m src.monitoring.run --audit --expected output/expected_trades.json \
 
 ---
 
+## Run the whole pipeline
+
+`run_pipeline.py` chains all four modules — optimizer → generator → risk →
+report — each stage writing the file the next one (or NinjaTrader) reads. Stage
+failures are isolated and reported; any stage can be skipped.
+
+```bash
+# full weekly run on free yfinance data, console report
+python run_pipeline.py --symbol SPY --interval 5m --total-trials 500000
+
+# quick end-to-end smoke run (tiny budget)
+python run_pipeline.py --total-trials 200 --eval-days 10
+
+# re-tune + regenerate only
+python run_pipeline.py --skip-risk --skip-report
+```
+
+---
+
 ## Run all tests
 
 ```bash
 for t in optimizer generator risk monitoring; do python tests/test_$t.py; done
 # optimizer 6 · generator 4 · risk 14 · monitoring 8  — all network-free
+```
+
+## Claude Code on the web
+
+A `SessionStart` hook (`.claude/hooks/session-start.sh`) installs the Python
+dependencies automatically when a web session starts, so the test suites and
+modules are ready to run without manual setup.
 
 ## Disclaimer
 

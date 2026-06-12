@@ -18,3 +18,6 @@ output/*.cs
 # Optuna study DB
 *.db
 *.sqlite3
+
+# optimizer scratch artifact
+output/_eval_window.pkl
