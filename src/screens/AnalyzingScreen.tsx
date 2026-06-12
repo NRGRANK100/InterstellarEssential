@@ -53,6 +53,7 @@ export function AnalyzingScreen({ navigation, route }: Props) {
           capture.overallSignals,
           capture.zoneSignals,
           capture.faceConfidence,
+          capture.zoneConcernScores,
         );
       } catch (e) {
         // GL backend / model unavailable (e.g. Expo Go) — degrade gracefully.

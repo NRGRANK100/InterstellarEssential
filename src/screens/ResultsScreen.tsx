@@ -62,6 +62,8 @@ export function ResultsScreen({ navigation, route }: Props) {
           >
             {analysis.engine === 'on_device'
               ? `On-device model${
+                  analysis.concernModelUsed ? ' (face + concern AI)' : ' (face detection)'
+                }${
                   analysis.faceConfidence
                     ? ` • ${Math.round(analysis.faceConfidence * 100)}% face match`
                     : ''

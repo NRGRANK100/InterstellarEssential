@@ -24,7 +24,8 @@ import * as tf from '@tensorflow/tfjs';
 import { decodeJpeg } from '@tensorflow/tfjs-react-native';
 import * as FileSystem from 'expo-file-system';
 
-import { FacialZoneId, ImageSignals } from '../types';
+import { ConcernId, FacialZoneId, ImageSignals } from '../types';
+import { inferZoneConcerns, loadConcernModel } from './concernModel';
 
 let tfReadyPromise: Promise<void> | null = null;
 let modelPromise: Promise<blazeface.BlazeFaceModel> | null = null;
@@ -102,6 +103,10 @@ export interface CaptureAnalysis {
   faceConfidence: number;
   overallSignals: ImageSignals;
   zoneSignals: Record<FacialZoneId, ImageSignals>;
+  /** Per-zone concern scores from the trained classifier, when available. */
+  zoneConcernScores?: Record<FacialZoneId, Partial<Record<ConcernId, number>>>;
+  /** True when the trained concern model contributed scores. */
+  concernModelUsed: boolean;
 }
 
 function clampRect(r: Rect, imgW: number, imgH: number): Rect {
@@ -259,6 +264,7 @@ export async function analyzeCapture(uri: string): Promise<CaptureAnalysis> {
         faceConfidence: 0,
         overallSignals: regionSignals(data, w, h, whole),
         zoneSignals,
+        concernModelUsed: false,
       };
     }
 
@@ -284,6 +290,28 @@ export async function analyzeCapture(uri: string): Promise<CaptureAnalysis> {
       zoneSignals[z] = regionSignals(data, w, h, rects[z]);
     });
 
+    // If a trained concern classifier is configured, run it per zone on the
+    // real image tensor; otherwise this is a no-op and the heuristic stands.
+    let zoneConcernScores:
+      | Record<FacialZoneId, Partial<Record<ConcernId, number>>>
+      | undefined;
+    let concernModelUsed = false;
+    try {
+      const concernModel = await loadConcernModel();
+      if (concernModel) {
+        zoneConcernScores = {} as Record<FacialZoneId, Partial<Record<ConcernId, number>>>;
+        for (const z of Object.keys(rects) as FacialZoneId[]) {
+          const scores = await inferZoneConcerns(concernModel, img, rects[z]);
+          if (scores) {
+            zoneConcernScores[z] = scores;
+            concernModelUsed = true;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Concern model inference failed; using heuristic scores:', e);
+    }
+
     const prob = face.probability as number[] | number | undefined;
     const faceConfidence = Array.isArray(prob) ? prob[0] : (prob ?? 0.9);
 
@@ -292,6 +320,8 @@ export async function analyzeCapture(uri: string): Promise<CaptureAnalysis> {
       faceConfidence,
       overallSignals: regionSignals(data, w, h, box),
       zoneSignals,
+      zoneConcernScores,
+      concernModelUsed,
     };
   } finally {
     img.dispose();

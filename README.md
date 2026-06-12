@@ -115,16 +115,26 @@ The pipeline runs a **real on-device model** end-to-end:
    luminance variance (texture), specular highlight ratio (oiliness), and
    high-frequency local contrast (pores/fine lines). These are normalized into
    the engine's signal ranges.
-3. **Concern scoring.** `src/services/skinAnalysis.ts` scores each of the 13
-   concerns per zone from those real signals (`runAnalysisFromZones`), rolls
-   them up into an overall report, derives skin type, and computes hydration /
-   sebum / overall skin score.
-4. **Recommendations.** `recommendations.ts` ranks products by concern match
+3. **Trained concern classifier (pluggable).** If a trained TensorFlow.js
+   skin-concern model is configured (`src/services/concernModel.ts`), each zone
+   crop is also run through it on-device, producing a score per concern. The
+   model loads fully offline via `bundleResourceIO` (bundled weights) or from a
+   cached remote URL. Until real weights are dropped in (see
+   `assets/models/skin/README.md` for the contract + training/export guide), the
+   classifier is disabled and step 4 uses the measured pixel signals instead.
+4. **Concern scoring.** `src/services/skinAnalysis.ts` builds the per-zone
+   breakdown (`runAnalysisFromZones`): a trained-model score is used when present,
+   otherwise the concern is scored from the zone's real pixel signals. Results
+   roll up into an overall report with derived skin type, hydration, sebum and
+   overall skin score.
+5. **Recommendations.** `recommendations.ts` ranks products by concern match
    (severity-weighted), skin-type fit, and **ethnicity fit** (boosting indicated
    products, flagging risky ones).
 
-The Results screen shows an **“On-device model • NN% face match”** badge when
-the model ran, or an **“Estimated”** badge when the heuristic fallback was used.
+The Results screen badge reflects exactly which engine ran: **“On-device model
+(face + concern AI) • NN% face match”** when a trained classifier scored the
+zones, **“On-device model (face detection)”** when only BlazeFace ran with pixel
+scoring, or **“Estimated”** for the heuristic fallback.
 
 ### Runtime requirements & fallback
 

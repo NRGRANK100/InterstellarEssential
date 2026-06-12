@@ -101,6 +101,8 @@ export interface AnalysisResult {
   engine: 'on_device' | 'heuristic';
   /** Face-detection confidence (0–1) when the on-device model was used. */
   faceConfidence?: number;
+  /** True when a trained concern classifier scored the zones. */
+  concernModelUsed?: boolean;
 }
 
 /** Aggregate signals extracted from the captured frame. */

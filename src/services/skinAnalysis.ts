@@ -273,6 +273,7 @@ function assemble(
   engine: AnalysisResult['engine'],
   id: string,
   faceConfidence?: number,
+  concernModelUsed?: boolean,
 ): AnalysisResult {
   // Overall concern = average of that concern across the zones that express it.
   const overallConcerns: ConcernResult[] = ALL_CONCERNS.map((cid) => {
@@ -305,6 +306,7 @@ function assemble(
     signals: overallSignals,
     engine,
     faceConfidence,
+    concernModelUsed,
   };
 }
 
@@ -318,12 +320,20 @@ export function runAnalysisFromZones(
   overallSignals: ImageSignals,
   zoneSignals: Record<FacialZoneId, ImageSignals>,
   faceConfidence?: number,
+  zoneConcernScores?: Record<FacialZoneId, Partial<Record<ConcernId, number>>>,
 ): AnalysisResult {
+  const concernModelUsed = !!zoneConcernScores;
   const zones: ZoneResult[] = (Object.keys(ZONE_CONCERNS) as FacialZoneId[]).map((zoneId) => {
     const sig = zoneSignals[zoneId] ?? overallSignals;
-    const concerns = ZONE_CONCERNS[zoneId].map((c) =>
-      makeConcernResult(c, scoreConcern(c, sig, tone, 0)),
-    );
+    const modelScores = zoneConcernScores?.[zoneId];
+    const concerns = ZONE_CONCERNS[zoneId].map((c) => {
+      // Trained classifier score wins when present; otherwise score from the
+      // physically-measured pixel signals for this zone.
+      const modelScore = modelScores?.[c];
+      const score =
+        modelScore != null ? modelScore : scoreConcern(c, sig, tone, 0);
+      return makeConcernResult(c, score);
+    });
     return {
       id: zoneId,
       label: ZONE_LABELS[zoneId],
@@ -339,6 +349,7 @@ export function runAnalysisFromZones(
     'on_device',
     `analysis_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
     faceConfidence,
+    concernModelUsed,
   );
 }
 
