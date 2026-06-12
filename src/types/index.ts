@@ -97,6 +97,10 @@ export interface AnalysisResult {
   overallSkinScore: number; // 0–100, higher = healthier
   /** Raw sampled image signals, kept for transparency / future ML. */
   signals: ImageSignals;
+  /** Which engine produced this result. */
+  engine: 'on_device' | 'heuristic';
+  /** Face-detection confidence (0–1) when the on-device model was used. */
+  faceConfidence?: number;
 }
 
 /** Aggregate signals extracted from the captured frame. */

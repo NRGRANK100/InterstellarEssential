@@ -50,6 +50,7 @@ skin).
 | Language          | TypeScript (strict)                           |
 | Navigation        | React Navigation (native-stack)               |
 | Camera            | `expo-camera`                                 |
+| On-device model   | TensorFlow.js + `tfjs-react-native` (WebGL) + BlazeFace |
 | Vector graphics   | `react-native-svg` (face zone map)            |
 | Storage           | `@react-native-async-storage/async-storage`   |
 | Build / submit    | EAS (`eas.json`)                              |
@@ -98,29 +99,46 @@ is sufficient for development.
 
 ---
 
-## How the analysis works (and an honest note)
+## How the analysis works
 
-The scoring pipeline in `src/services/skinAnalysis.ts` is deterministic and
-fully exercised end-to-end:
+The pipeline runs a **real on-device model** end-to-end:
 
-1. `extractSignals()` produces aggregate image signals (brightness, redness
-   index, luminance variance, highlight ratio, local contrast).
-2. Each of the 13 concerns has its own evidence formula plus a tone-driven
-   predisposition bias, scored 0–100 per facial zone.
-3. Per-zone results roll up into an overall report, a derived skin type, and an
-   overall skin score.
-4. `recommendations.ts` ranks products by concern match (severity-weighted),
-   skin-type fit, and **ethnicity fit** (boosting indicated products, flagging
-   risky ones).
+1. **Face detection (on-device model).** `src/services/faceModel.ts` loads
+   Google's **BlazeFace** and runs it locally through **TensorFlow.js** with the
+   `tfjs-react-native` WebGL backend. The captured JPEG is decoded into a real
+   pixel tensor (`decodeJpeg`), and BlazeFace returns the face bounding box,
+   landmarks (eyes/nose/mouth/ears) and a confidence score. No face → the user
+   is asked to retake.
+2. **Per-zone pixel statistics (real pixels).** The face box + eye landmarks are
+   used to crop the 7 facial zones, and for each zone we compute genuine
+   per-pixel measurements from the captured frame: mean RGB, redness index,
+   luminance variance (texture), specular highlight ratio (oiliness), and
+   high-frequency local contrast (pores/fine lines). These are normalized into
+   the engine's signal ranges.
+3. **Concern scoring.** `src/services/skinAnalysis.ts` scores each of the 13
+   concerns per zone from those real signals (`runAnalysisFromZones`), rolls
+   them up into an overall report, derives skin type, and computes hydration /
+   sebum / overall skin score.
+4. **Recommendations.** `recommendations.ts` ranks products by concern match
+   (severity-weighted), skin-type fit, and **ethnicity fit** (boosting indicated
+   products, flagging risky ones).
 
-> **Note on the CV/ML model.** True per-pixel facial analysis requires a
-> computer-vision model and a native pixel-buffer module, which is out of scope
-> for the Expo managed runtime in this reference build. `extractSignals()` is the
-> single, well-documented seam where you plug in a real on-device model
-> (TensorFlow Lite / Core ML) or a server inference call — the scoring,
-> per-zone breakdown, UI, and recommendation logic are identical regardless of
-> the signal source. The reference build derives stable, plausible signals from
-> the capture + the user's tone baseline so the whole product works today.
+The Results screen shows an **“On-device model • NN% face match”** badge when
+the model ran, or an **“Estimated”** badge when the heuristic fallback was used.
+
+### Runtime requirements & fallback
+
+- The on-device model needs the native GL backend, so it runs in an **EAS dev or
+  production build** (and the Expo Go sandbox will use the fallback). Build a dev
+  client with `eas build --profile development` or `npx expo run:ios` /
+  `run:android`.
+- **First run downloads the BlazeFace weights (~a few hundred KB)** and caches
+  them; that initial load needs network. For fully offline weights, switch
+  `loadFaceModel()` to `bundleResourceIO` (the `bin` asset extension is already
+  enabled in `metro.config.js`).
+- If the model or backend is unavailable, the app **gracefully falls back** to a
+  deterministic heuristic engine (`runAnalysis`) so it never breaks; the
+  fallback is clearly labelled in the UI.
 
 This app provides **cosmetic guidance only** — it is not a medical device and
 does not diagnose conditions.

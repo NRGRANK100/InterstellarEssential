@@ -77,8 +77,9 @@ export function ScanScreen({ navigation }: Props) {
     setBusy(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.6 });
-      const seed = hashSeed(`${photo?.uri ?? Date.now()}:${photo?.width ?? 0}`);
-      navigation.replace('Analyzing', { toneProfile, captureSeed: seed });
+      const uri = photo?.uri ?? '';
+      const seed = hashSeed(`${uri || Date.now()}:${photo?.width ?? 0}`);
+      navigation.replace('Analyzing', { toneProfile, photoUri: uri, captureSeed: seed });
     } catch (e) {
       console.warn('scan capture failed', e);
       setBusy(false);

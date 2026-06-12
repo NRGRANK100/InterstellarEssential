@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0B0E1A"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nrgrank.interstellaressential",
@@ -29,7 +31,10 @@
       },
       "package": "com.nrgrank.interstellaressential",
       "versionCode": 1,
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -41,7 +46,8 @@
         {
           "cameraPermission": "Interstellar Essential uses the camera to scan your face and analyze your skin."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "eas": {

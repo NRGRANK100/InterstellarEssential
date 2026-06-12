@@ -265,6 +265,87 @@ function deriveSkinType(s: ImageSignals): { skinType: SkinType; hydration: numbe
   return { skinType, hydration, sebum };
 }
 
+/** Assemble a full report from finished per-zone results + overall signals. */
+function assemble(
+  tone: SkinToneProfile,
+  zones: ZoneResult[],
+  overallSignals: ImageSignals,
+  engine: AnalysisResult['engine'],
+  id: string,
+  faceConfidence?: number,
+): AnalysisResult {
+  // Overall concern = average of that concern across the zones that express it.
+  const overallConcerns: ConcernResult[] = ALL_CONCERNS.map((cid) => {
+    const scores: number[] = [];
+    zones.forEach((z) => {
+      const found = z.concerns.find((c) => c.id === cid);
+      if (found) scores.push(found.score);
+    });
+    const avg = scores.length
+      ? scores.reduce((a, b) => a + b, 0) / scores.length
+      : scoreConcern(cid, overallSignals, tone, 0);
+    return makeConcernResult(cid, avg);
+  }).sort((a, b) => b.score - a.score);
+
+  const { skinType, hydration, sebum } = deriveSkinType(overallSignals);
+  const avgConcern =
+    overallConcerns.reduce((a, c) => a + c.score, 0) / overallConcerns.length;
+  const overallSkinScore = Math.round(clamp(100 - avgConcern));
+
+  return {
+    id,
+    createdAt: Date.now(),
+    toneProfile: tone,
+    overallConcerns,
+    zones,
+    skinType,
+    hydrationLevel: hydration,
+    sebumLevel: sebum,
+    overallSkinScore,
+    signals: overallSignals,
+    engine,
+    faceConfidence,
+  };
+}
+
+/**
+ * Build a report from REAL per-zone signals produced by the on-device model
+ * (`faceModel.analyzeCapture`). Each zone is scored from its own measured
+ * pixels — no synthetic jitter.
+ */
+export function runAnalysisFromZones(
+  tone: SkinToneProfile,
+  overallSignals: ImageSignals,
+  zoneSignals: Record<FacialZoneId, ImageSignals>,
+  faceConfidence?: number,
+): AnalysisResult {
+  const zones: ZoneResult[] = (Object.keys(ZONE_CONCERNS) as FacialZoneId[]).map((zoneId) => {
+    const sig = zoneSignals[zoneId] ?? overallSignals;
+    const concerns = ZONE_CONCERNS[zoneId].map((c) =>
+      makeConcernResult(c, scoreConcern(c, sig, tone, 0)),
+    );
+    return {
+      id: zoneId,
+      label: ZONE_LABELS[zoneId],
+      concerns,
+      summary: zoneSummary(zoneId, concerns),
+    };
+  });
+
+  return assemble(
+    tone,
+    zones,
+    overallSignals,
+    'on_device',
+    `analysis_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+    faceConfidence,
+  );
+}
+
+/**
+ * Heuristic fallback used when the on-device model/GL backend is unavailable
+ * (e.g. the Expo Go sandbox). Derives stable signals from the capture seed.
+ */
 export function runAnalysis(tone: SkinToneProfile, captureSeed: number): AnalysisResult {
   const signals = extractSignals(captureSeed, tone);
   const rng = mulberry32(captureSeed ^ 0x9e3779b9);
@@ -281,36 +362,7 @@ export function runAnalysis(tone: SkinToneProfile, captureSeed: number): Analysi
     };
   });
 
-  // Overall concern = average of that concern across the zones that express it.
-  const overallConcerns: ConcernResult[] = ALL_CONCERNS.map((id) => {
-    const scores: number[] = [];
-    zones.forEach((z) => {
-      const found = z.concerns.find((c) => c.id === id);
-      if (found) scores.push(found.score);
-    });
-    const avg = scores.length
-      ? scores.reduce((a, b) => a + b, 0) / scores.length
-      : scoreConcern(id, signals, tone, 0);
-    return makeConcernResult(id, avg);
-  }).sort((a, b) => b.score - a.score);
-
-  const { skinType, hydration, sebum } = deriveSkinType(signals);
-  const avgConcern =
-    overallConcerns.reduce((a, c) => a + c.score, 0) / overallConcerns.length;
-  const overallSkinScore = Math.round(clamp(100 - avgConcern));
-
-  return {
-    id: `analysis_${captureSeed}`,
-    createdAt: Date.now(),
-    toneProfile: tone,
-    overallConcerns,
-    zones,
-    skinType,
-    hydrationLevel: hydration,
-    sebumLevel: sebum,
-    overallSkinScore,
-    signals,
-  };
+  return assemble(tone, zones, signals, 'heuristic', `analysis_${captureSeed}`);
 }
 
 export { CONCERN_LABELS, ZONE_LABELS };

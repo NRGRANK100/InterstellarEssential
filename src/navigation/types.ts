@@ -5,7 +5,7 @@ export type RootStackParamList = {
   SkinToneSetup: { prefill?: Partial<SkinToneProfile> } | undefined;
   ReferencePhoto: undefined;
   Scan: undefined;
-  Analyzing: { toneProfile: SkinToneProfile; captureSeed: number };
+  Analyzing: { toneProfile: SkinToneProfile; photoUri: string; captureSeed: number };
   Results: { analysisId: string };
   ZoneDetail: { analysisId: string; zoneId: FacialZoneId };
   Recommendations: { analysisId: string };

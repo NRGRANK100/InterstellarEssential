@@ -46,6 +46,31 @@ export function ResultsScreen({ navigation, route }: Props) {
       style={styles.container}
       contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 120 }}
     >
+      {/* Engine badge */}
+      <View style={styles.engineRow}>
+        <View
+          style={[
+            styles.engineBadge,
+            { borderColor: analysis.engine === 'on_device' ? colors.success : colors.warning },
+          ]}
+        >
+          <Text
+            style={[
+              styles.engineText,
+              { color: analysis.engine === 'on_device' ? colors.success : colors.warning },
+            ]}
+          >
+            {analysis.engine === 'on_device'
+              ? `On-device model${
+                  analysis.faceConfidence
+                    ? ` • ${Math.round(analysis.faceConfidence * 100)}% face match`
+                    : ''
+                }`
+              : 'Estimated (model unavailable)'}
+          </Text>
+        </View>
+      </View>
+
       {/* Overall score */}
       <View style={styles.scoreCard}>
         <View style={[styles.scoreRing, { borderColor: scoreColor }]}>
@@ -183,6 +208,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   muted: { color: colors.textMuted },
+  engineRow: { flexDirection: 'row', marginBottom: spacing.sm },
+  engineBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+  },
+  engineText: { fontSize: 11, fontWeight: '700' },
   scoreCard: {
     flexDirection: 'row',
     alignItems: 'center',
