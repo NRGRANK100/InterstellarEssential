@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Interstellar Essential",
+    "slug": "interstellar-essential",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "interstellaressential",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0E1A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nrgrank.interstellaressential",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Interstellar Essential uses the camera to scan your face and analyze your skin for personalized skincare recommendations.",
+        "NSPhotoLibraryUsageDescription": "Interstellar Essential needs access to your photos so you can use an existing photo as a skin-tone reference."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0E1A"
+      },
+      "package": "com.nrgrank.interstellaressential",
+      "versionCode": 1,
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Interstellar Essential uses the camera to scan your face and analyze your skin."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  }
+}
