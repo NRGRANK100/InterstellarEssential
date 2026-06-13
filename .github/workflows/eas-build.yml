@@ -1,0 +1,71 @@
+name: EAS Build
+
+# Manually trigger a cloud build via EAS. Produces an installable build you can
+# put on a device to exercise the real camera + on-device TF/BlazeFace pipeline.
+#
+# Requires one repository secret:
+#   EXPO_TOKEN  — an Expo access token (Expo dashboard → Account → Access Tokens)
+#
+# Before the first run, set a real EAS project id:
+#   npx eas-cli@latest init        (updates extra.eas.projectId in app.json)
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: android
+        options: [android, ios, all]
+      profile:
+        description: EAS build profile (see eas.json)
+        type: choice
+        default: development
+        options: [development, preview, production]
+      submit:
+        description: Auto-submit to the store after build (production only)
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Verify EXPO_TOKEN is set
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "::error::EXPO_TOKEN secret is not set. Add it in Settings → Secrets → Actions."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build
+        run: |
+          eas build \
+            --non-interactive \
+            --platform ${{ inputs.platform }} \
+            --profile ${{ inputs.profile }} \
+            --no-wait
+
+      - name: Submit
+        if: ${{ inputs.submit && inputs.profile == 'production' }}
+        run: |
+          eas submit \
+            --non-interactive \
+            --platform ${{ inputs.platform }} \
+            --profile production \
+            --latest

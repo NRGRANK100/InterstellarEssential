@@ -184,3 +184,41 @@ Before submitting:
   ID / team ID; Google service-account key path).
 - Swap the placeholder `assets/` artwork for final brand assets.
 - Add a privacy policy (required by both stores for camera + on-device data).
+
+---
+
+## Continuous integration & cloud builds
+
+Two GitHub Actions workflows are included (`.github/workflows/`):
+
+### `ci.yml` — runs on every push & PR (no secrets needed)
+
+Typecheck → `expo-doctor` → headless engine demo (`npm run demo`) → a real iOS
+JS bundle (`expo export`). This is the same set of checks verified locally and
+catches regressions without any credentials.
+
+### `eas-build.yml` — manual cloud build (`workflow_dispatch`)
+
+Produces an **installable build** so you can run the full app — camera plus the
+on-device TF/BlazeFace pipeline — on a real device.
+
+**One-time setup:**
+
+1. Create an Expo access token: Expo dashboard → **Account → Access Tokens**.
+2. Add it as a repo secret named **`EXPO_TOKEN`** (Settings → Secrets and
+   variables → Actions).
+3. Initialize a real EAS project id once: `npx eas-cli@latest init` (writes
+   `extra.eas.projectId` into `app.json`), then commit.
+
+**Run it:** GitHub → **Actions → EAS Build → Run workflow**, then choose:
+
+- **platform**: `android` (credential-free — EAS auto-generates a keystore),
+  `ios` (needs Apple credentials configured in EAS), or `all`.
+- **profile**: `development` (dev client — best for testing the model path),
+  `preview` (internal install), or `production` (store build).
+- **submit**: optionally auto-submit a `production` build to the store.
+
+For local dev builds instead of CI: `eas build --profile development --platform android`,
+or run an attached dev client directly with `npx expo run:android` /
+`npx expo run:ios`.
+
