@@ -89,6 +89,29 @@ def _stage_risk(args) -> bool:
     return True
 
 
+def _stage_broker(args) -> bool:
+    """Execute one live cycle through the Robinhood connector (opt-in)."""
+    from src.broker.client import RobinhoodClient
+    from src.broker.trader import LiveTrader, TraderConfig
+
+    client = RobinhoodClient(dry_run=args.dry_run)
+    client.login()  # creds from env / .env
+    cfg = TraderConfig(
+        symbol=args.symbol,
+        interval=args.broker_interval,
+        base_quantity=args.base_quantity,
+        params_path=args.params,
+        risk_path=args.risk_out,
+        executions_path=args.executions,
+        allow_short=args.allow_short,
+    )
+    summary = LiveTrader(client=client, cfg=cfg).step()
+    log.info("Broker cycle: desired=%s target=%s current=%s delta=%s (dry_run=%s)",
+             summary["desired_position"], summary["target_shares"],
+             summary["current_shares"], summary["delta"], args.dry_run)
+    return True
+
+
 def _stage_report(args) -> bool:
     from src.monitoring.notifier import make_notifier
     from src.monitoring.reports import strategy_of_the_week
@@ -104,6 +127,7 @@ STAGES = [
     ("optimizer", "skip_optimizer", _stage_optimizer),
     ("generator", "skip_generator", _stage_generator),
     ("risk", "skip_risk", _stage_risk),
+    ("broker", "skip_broker", _stage_broker),
     ("report", "skip_report", _stage_report),
 ]
 
@@ -165,6 +189,16 @@ def _parse_args(argv=None):
     p.add_argument("--account-state", default=None,
                    help="JSON file with day_pnl / max_daily_drawdown from the live side")
 
+    # broker (Robinhood execution — opt-in, places live orders unless --dry-run)
+    p.add_argument("--broker-interval", default="5minute",
+                   help="robin_stocks bar interval for the live signal")
+    p.add_argument("--executions", default="output/executions.csv",
+                   help="where the connector records fills for the audit")
+    p.add_argument("--allow-short", action="store_true",
+                   help="permit shorts (default long-only: short signal -> flat)")
+    p.add_argument("--dry-run", action="store_true",
+                   help="broker stage logs intended orders without placing them")
+
     # report
     p.add_argument("--notifier", choices=["console", "discord", "telegram"], default="console")
 
@@ -173,6 +207,10 @@ def _parse_args(argv=None):
     p.add_argument("--skip-generator", action="store_true")
     p.add_argument("--skip-risk", action="store_true")
     p.add_argument("--skip-report", action="store_true")
+    # the broker stage trades real money, so it is OFF unless explicitly enabled
+    p.add_argument("--with-broker", dest="skip_broker", action="store_false",
+                   help="run the Robinhood execution stage (off by default)")
+    p.set_defaults(skip_broker=True)
     p.add_argument("--keep-going", action="store_true",
                    help="continue running later stages even if one fails")
     return p.parse_args(argv)

@@ -1,11 +1,13 @@
 # Interstellar Essential — Self-Optimizing NinjaTrader 8 Pipeline
 
-A self-optimizing automated trading pipeline for **NinjaTrader 8**. A weekly
-Python job searches a large parameter space across ten strategies, picks the
-best performer, and hands optimized parameters to a live NinjaScript strategy
-through a shared file — with a news/risk layer and a reporting bot on top.
+A self-optimizing automated trading pipeline. A weekly Python job searches a
+large parameter space across ten strategies, picks the best performer, and
+hands the optimized parameters to a live execution layer through shared files —
+with a news/risk layer and a reporting bot on top. Execution can target either
+**NinjaTrader 8** (generated NinjaScript) or **Robinhood** (live Python
+connector); both consume the same `active_params.json` + `risk_state.json`.
 
-The system is built in four parts:
+The system is built in five parts:
 
 | # | Module | Language | Status |
 |---|--------|----------|--------|
@@ -13,6 +15,7 @@ The system is built in four parts:
 | 2 | **Generator** — Jinja2 fills a NinjaScript C# template from the champion JSON | Python / C# | ✅ implemented |
 | 3 | **Risk Layer** — high-impact news + drawdown guard, halves position size | Python / C# | ✅ implemented |
 | 4 | **Monitoring** — Discord/Telegram bot: daily PnL, win rate, weekly "Strategy of the Week", execution audit | Python | ✅ implemented |
+| 5 | **Robinhood Connector** — live equities execution via `robin_stocks` (alternative to NinjaTrader) | Python | ✅ implemented |
 
 ---
 
@@ -244,14 +247,69 @@ python -m src.monitoring.run --audit --expected output/expected_trades.json \
 
 ---
 
-## Run the whole pipeline
+## 6. Module 5 — the Robinhood Connector  ✅
 
-`run_pipeline.py` chains all four modules — optimizer → generator → risk →
-report — each stage writing the file the next one (or NinjaTrader) reads. Stage
-failures are isolated and reported; any stage can be skipped.
+> Live **equities** execution as an alternative to NinjaTrader. Instead of
+> generating a NinjaScript `.cs`, the connector runs the optimizer's *own*
+> strategy functions on live bars and places orders through Robinhood — reusing
+> the same `active_params.json` and `risk_state.json` contracts.
+
+```
+src/broker/
+├── client.py       # robin_stocks wrapper: login, bars->canonical OHLCV, orders
+├── risk_state.py   # reads risk_multiplier (clamped to (0,1]; never upsizes)
+├── trader.py       # LiveTrader: signal -> risk-sized target -> reconcile -> order
+└── run.py          # CLI: single cycle or --loop; --dry-run
+```
+
+**Run it (after the optimizer + risk engine have written their files):**
 
 ```bash
-# full weekly run on free yfinance data, console report
+# one evaluate->order cycle (places real orders once creds are set)
+python -m src.broker.run --symbol SPY --base-quantity 2
+
+# log intended orders without placing them
+python -m src.broker.run --symbol SPY --dry-run
+
+# run continuously, one cycle every 5 minutes
+python -m src.broker.run --symbol SPY --loop 300
+```
+
+**How it works**
+
+- **Same signals as the backtest:** `LiveTrader` loads the champion from
+  `active_params.json` and calls the identical `strategies.REGISTRY[name].fn`
+  the optimizer scored, so live and backtested logic can't drift.
+- **Risk-aware sizing:** order size is `floor(base_quantity × risk_multiplier)`
+  read from `risk_state.json` — the same Module 3 file the NinjaScript used. An
+  unreadable/out-of-range value falls back to `1.0` and never *upsizes*.
+- **Long-only by default:** Robinhood equities don't short, so a `-1` signal is
+  treated as flat (exit). Pass `--allow-short` only for accounts that support it.
+- **Idempotent reconcile:** each cycle computes `target − current` and trades
+  only the delta, so a crash between cycles never compounds a position.
+- **Audit trail:** every fill is appended to `output/executions.csv` in the
+  format the Module 4 audit already reads, closing the backtest-vs-live loop.
+
+**Credentials** (in `.env`): `ROBINHOOD_USERNAME`, `ROBINHOOD_PASSWORD`,
+`ROBINHOOD_MFA` (TOTP secret or current code).
+
+> ⚠️ **This stage places real orders.** It is **off by default** in the
+> orchestrator (opt in with `--with-broker`) and the standalone CLI supports
+> `--dry-run`. Validate on a funded-but-small or paper-equivalent account first.
+
+**Tests:** `python tests/test_broker.py`  (11 tests, no network — uses a fake API)
+
+---
+
+## Run the whole pipeline
+
+`run_pipeline.py` chains the modules — optimizer → generator → risk → **broker**
+→ report — each stage writing the file the next one (or NinjaTrader) reads.
+Stage failures are isolated and reported; any stage can be skipped. The broker
+stage is **off by default** (it trades live); enable it with `--with-broker`.
+
+```bash
+# full weekly run on free yfinance data, console report (no live trading)
 python run_pipeline.py --symbol SPY --interval 5m --total-trials 500000
 
 # quick end-to-end smoke run (tiny budget)
@@ -259,6 +317,10 @@ python run_pipeline.py --total-trials 200 --eval-days 10
 
 # re-tune + regenerate only
 python run_pipeline.py --skip-risk --skip-report
+
+# include live Robinhood execution (dry-run shown; drop --dry-run to go live)
+python run_pipeline.py --symbol SPY --total-trials 200 --eval-days 10 \
+    --with-broker --dry-run
 ```
 
 ---
@@ -266,8 +328,8 @@ python run_pipeline.py --skip-risk --skip-report
 ## Run all tests
 
 ```bash
-for t in optimizer generator risk monitoring; do python tests/test_$t.py; done
-# optimizer 6 · generator 4 · risk 14 · monitoring 8  — all network-free
+for t in optimizer generator risk monitoring broker; do python tests/test_$t.py; done
+# optimizer 6 · generator 4 · risk 14 · monitoring 8 · broker 11  — all network-free
 ```
 
 ## Claude Code on the web

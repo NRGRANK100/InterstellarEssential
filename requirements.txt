@@ -9,6 +9,10 @@ pandas>=2.1,<3.0
 yfinance>=0.2.40          # free OHLCV pulls for backtesting
 requests>=2.31            # FinancialModelingPrep / ForexFactory news pulls
 
+# Brokerage connector (Module 5: Robinhood live execution)
+robin_stocks>=3.0         # Robinhood equities API
+pyotp>=2.9                # derive TOTP codes from a Robinhood MFA secret
+
 # Optimization
 optuna>=3.6,<5.0          # primary search engine (TPE / pruning)
 scipy>=1.11               # optional fallback optimizers + stats

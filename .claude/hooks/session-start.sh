@@ -19,6 +19,7 @@ echo 'export PYTHONPATH="${CLAUDE_PROJECT_DIR:-.}:${PYTHONPATH:-}"' >> "$CLAUDE_
 # Upgrading pip is best-effort (the base image's pip may be distro-managed).
 python -m pip install --quiet --upgrade pip || true
 python -m pip install --quiet \
-  numpy pandas optuna scipy yfinance requests Jinja2 PyYAML python-dotenv
+  numpy pandas optuna scipy yfinance requests Jinja2 PyYAML python-dotenv \
+  robin_stocks pyotp
 
 echo "session-start: dependencies installed."
