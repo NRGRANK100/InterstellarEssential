@@ -28,6 +28,7 @@ python-telegram-bot>=21.0 # Telegram bot
 # Config / utilities
 PyYAML>=6.0
 python-dotenv>=1.0        # load API keys / secrets from .env
+tzdata>=2024.1            # IANA tz db for the scheduler's zoneinfo (Windows safety net)
 
 # Optional acceleration
 numba>=0.59               # JIT for hot inner loops (optional)

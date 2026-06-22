@@ -7,7 +7,7 @@ with a news/risk layer and a reporting bot on top. Execution can target either
 **NinjaTrader 8** (generated NinjaScript) or **Robinhood** (live Python
 connector); both consume the same `active_params.json` + `risk_state.json`.
 
-The system is built in five parts:
+The system is built in six parts:
 
 | # | Module | Language | Status |
 |---|--------|----------|--------|
@@ -16,6 +16,9 @@ The system is built in five parts:
 | 3 | **Risk Layer** — high-impact news + drawdown guard, halves position size | Python / C# | ✅ implemented |
 | 4 | **Monitoring** — Discord/Telegram bot: daily PnL, win rate, weekly "Strategy of the Week", execution audit | Python | ✅ implemented |
 | 5 | **Robinhood Connector** — live equities execution via `robin_stocks` (alternative to NinjaTrader) | Python | ✅ implemented |
+| 6 | **Scheduler** — hands-off daemon: auto-optimizes weekly, trades on a loop in market hours, reports daily | Python | ✅ implemented |
+
+> **Just want it to run itself?** Jump to [Auto mode](#auto-mode--run-the-whole-thing-hands-off).
 
 ---
 
@@ -312,7 +315,70 @@ python -m src.broker.run --symbol SPY --loop 300
 
 ---
 
-## Run the whole pipeline
+## 7. Module 6 — the Scheduler  ✅
+
+> The "auto" layer. One long-running process that drives everything on a
+> schedule — no cron, no manual kicks.
+
+```
+src/scheduler/
+├── clock.py    # market-hours + schedule predicates (pure, US/Eastern)
+└── daemon.py   # the loop: weekly optimize · trade cycles · daily report
+```
+
+It wakes every `--tick` seconds (default 30s) and fires three time-based jobs,
+each reusing the existing modules unchanged:
+
+| Job | When (US/Eastern) | What it does |
+|-----|-------------------|--------------|
+| **weekly** | Sundays ≥ 08:00, once/week | re-tune (optimizer) → regenerate `.cs` → refresh risk state |
+| **trade** | Mon–Fri 09:30–16:00, every `--trade-every` min | refresh risk → one Robinhood `LiveTrader.step()` cycle |
+| **report** | weekdays after 16:05, once/day | daily PnL / win-rate report via the notifier |
+
+Why it's safe to leave running:
+- **Idempotent.** Each job's last-run time is persisted to
+  `output/scheduler_state.json`, so a restart mid-day never double-fires; the
+  trader only ever trades the position *delta*, so an extra tick can't compound.
+- **Market-hours gated.** The trade job refuses to run outside regular US
+  equity hours (unless you turn that off).
+- **Fault-isolated.** A failing job is logged and retried next tick — one bad
+  cycle never takes the daemon down.
+
+### Auto mode — run the whole thing hands-off
+
+```bash
+# 1) prove it safely first — no real orders, fast console reports
+python -m src.scheduler.daemon --symbol SPY --dry-run
+
+# 2) kick a single job on demand (no waiting for the schedule)
+python -m src.scheduler.daemon --once weekly        # build active_params.json now
+python -m src.scheduler.daemon --once trade --dry-run
+python -m src.scheduler.daemon --once report
+
+# 3) go live (real orders during market hours; Ctrl-C to stop)
+python -m src.scheduler.daemon --symbol SPY --base-quantity 1 \
+    --trade-every 5 --notifier telegram
+```
+
+Run it unattended with your OS service manager (examples):
+
+```ini
+# systemd: /etc/systemd/system/interstellar.service
+[Service]
+WorkingDirectory=/path/to/InterstellarEssential
+EnvironmentFile=/path/to/InterstellarEssential/.env
+ExecStart=/usr/bin/python -m src.scheduler.daemon --symbol SPY --base-quantity 1
+Restart=always
+```
+
+> ⚠️ Auto mode places **real orders** unless `--dry-run`. Start with
+> `--dry-run`, then `--base-quantity 1`, and watch the first sessions.
+
+**Tests:** `python tests/test_scheduler.py`  (12 tests, no network, no sleeping)
+
+---
+
+## Run the whole pipeline once
 
 `run_pipeline.py` chains the modules — optimizer → generator → risk → **broker**
 → report — each stage writing the file the next one (or NinjaTrader) reads.
@@ -339,8 +405,8 @@ python run_pipeline.py --symbol SPY --total-trials 200 --eval-days 10 \
 ## Run all tests
 
 ```bash
-for t in optimizer generator risk monitoring broker; do python tests/test_$t.py; done
-# optimizer 6 · generator 4 · risk 14 · monitoring 8 · broker 12  — all network-free
+for t in optimizer generator risk monitoring broker scheduler; do python tests/test_$t.py; done
+# optimizer 6 · generator 4 · risk 14 · monitoring 8 · broker 12 · scheduler 12  — all network-free
 ```
 
 ## Claude Code on the web

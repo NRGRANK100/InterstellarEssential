@@ -20,6 +20,6 @@ echo 'export PYTHONPATH="${CLAUDE_PROJECT_DIR:-.}:${PYTHONPATH:-}"' >> "$CLAUDE_
 python -m pip install --quiet --upgrade pip || true
 python -m pip install --quiet \
   numpy pandas optuna scipy yfinance requests Jinja2 PyYAML python-dotenv \
-  robin_stocks pyotp
+  robin_stocks pyotp tzdata
 
 echo "session-start: dependencies installed."
