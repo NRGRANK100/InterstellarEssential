@@ -67,7 +67,18 @@ python -m src.optimizer.sunday_optimizer \
 python -m src.optimizer.sunday_optimizer \
     --source ninjatrader --csv-path data/ES_5min.csv \
     --total-trials 500000 --out output/active_params.json
+
+# …or Robinhood bars — the SAME feed the live connector trades on,
+# so the backtest sees what execution sees (needs ROBINHOOD_* creds)
+python -m src.optimizer.sunday_optimizer \
+    --source robinhood --symbol SPY --interval 5m \
+    --total-trials 500000 --out output/active_params.json
 ```
+
+> **Data source choice:** `yfinance` is the free research feed; **`robinhood`
+> matches the live execution feed** (recommended when you trade via Module 5);
+> `ninjatrader` reads exported CSVs. All three normalize to the same OHLCV
+> schema, so the strategies/backtester don't care which you pick.
 
 **How it hits the requirements**
 
@@ -297,7 +308,7 @@ python -m src.broker.run --symbol SPY --loop 300
 > orchestrator (opt in with `--with-broker`) and the standalone CLI supports
 > `--dry-run`. Validate on a funded-but-small or paper-equivalent account first.
 
-**Tests:** `python tests/test_broker.py`  (11 tests, no network — uses a fake API)
+**Tests:** `python tests/test_broker.py`  (12 tests, no network — uses a fake API)
 
 ---
 
@@ -329,7 +340,7 @@ python run_pipeline.py --symbol SPY --total-trials 200 --eval-days 10 \
 
 ```bash
 for t in optimizer generator risk monitoring broker; do python tests/test_$t.py; done
-# optimizer 6 · generator 4 · risk 14 · monitoring 8 · broker 11  — all network-free
+# optimizer 6 · generator 4 · risk 14 · monitoring 8 · broker 12  — all network-free
 ```
 
 ## Claude Code on the web

@@ -110,6 +110,41 @@ def load_ninjatrader_csv(path: str | Path) -> pd.DataFrame:
     return _normalize(df)
 
 
+# map the optimizer's yfinance-style intervals to robin_stocks intervals
+_RH_INTERVAL = {
+    "5m": "5minute",
+    "10m": "10minute",
+    "1h": "hour",
+    "60m": "hour",
+    "1d": "day",
+}
+
+
+def load_robinhood(
+    symbol: str,
+    interval: str = "5m",
+    client: object = None,
+) -> pd.DataFrame:
+    """
+    Pull bars from Robinhood via the Module 5 connector so backtest data
+    matches the live execution feed.
+
+    Imported lazily to avoid a circular import (``src.broker`` depends on this
+    module). Requires Robinhood credentials in the environment unless a
+    pre-built/logged-in ``client`` is injected (handy for tests).
+    """
+    rh_interval = _RH_INTERVAL.get(interval.lower(), interval)
+
+    if client is None:
+        from src.broker.client import RobinhoodClient  # lazy: breaks import cycle
+
+        client = RobinhoodClient()
+        client.login()
+
+    # client.get_history already returns the canonical OHLCV schema
+    return _normalize(client.get_history(symbol, interval=rh_interval))
+
+
 def load_data(source: str, **kwargs) -> pd.DataFrame:
     """Dispatch helper used by config-driven runs."""
     source = source.lower()
@@ -117,4 +152,6 @@ def load_data(source: str, **kwargs) -> pd.DataFrame:
         return load_yfinance(**kwargs)
     if source in ("ninjatrader", "csv", "nt"):
         return load_ninjatrader_csv(**kwargs)
+    if source in ("robinhood", "rh"):
+        return load_robinhood(**kwargs)
     raise ValueError(f"Unknown data source: {source!r}")

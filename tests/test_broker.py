@@ -124,6 +124,26 @@ def test_historicals_to_canonical_schema():
     assert len(df) == 10
 
 
+# ── optimizer data source: Robinhood ────────────────────────────────────
+
+
+def test_optimizer_can_load_bars_from_robinhood():
+    """The optimizer's data loader can pull bars via the connector."""
+    from src.optimizer.data import load_robinhood, load_data
+
+    c = RobinhoodClient(api=FakeApi(_fake_bars(40)), dry_run=True)
+    c._logged_in = True
+
+    df = load_robinhood("SPY", interval="5m", client=c)
+    assert list(df.columns) == CANONICAL_COLS
+    assert len(df) == 40
+    assert df.index.tz is None
+
+    # and through the generic dispatch used by config-driven runs
+    df2 = load_data("robinhood", symbol="SPY", interval="5m", client=c)
+    assert len(df2) == len(df)
+
+
 # ── client order plumbing ───────────────────────────────────────────────
 
 

@@ -136,6 +136,9 @@ def run(cfg: OptimizerConfig) -> dict:
     # 1. load + window the data
     if cfg.source == "yfinance":
         df = load_data("yfinance", symbol=cfg.symbol, interval=cfg.interval, period=cfg.period)
+    elif cfg.source == "robinhood":
+        # same feed the Robinhood connector trades on, so live ≈ backtest
+        df = load_data("robinhood", symbol=cfg.symbol, interval=cfg.interval)
     else:
         df = load_data("ninjatrader", path=cfg.csv_path)
 
@@ -235,7 +238,8 @@ def run(cfg: OptimizerConfig) -> dict:
 
 def _parse_args(argv=None) -> OptimizerConfig:
     p = argparse.ArgumentParser(description="Sunday Optimizer for NinjaTrader 8 pipeline")
-    p.add_argument("--source", choices=["yfinance", "ninjatrader"], default="yfinance")
+    p.add_argument("--source", choices=["yfinance", "ninjatrader", "robinhood"],
+                   default="yfinance")
     p.add_argument("--symbol", default="SPY")
     p.add_argument("--interval", default="5m")
     p.add_argument("--period", default="60d")
